@@ -1,0 +1,135 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Career Vacancy Portal</title>
+<style>
+body{font:15px Arial;margin:0;background:#f3f6fb;color:#172033}header{background:#142746;color:white;padding:22px}main{max-width:1000px;margin:24px auto;padding:0 14px}.card{background:white;border:1px solid #ddd;border-radius:12px;padding:18px;margin:14px 0}input,select{width:100%;padding:11px;margin:5px 0 13px;border:1px solid #bbb;border-radius:7px;box-sizing:border-box}button{padding:11px 16px;background:#2563eb;color:white;border:0;border-radius:7px}label{font-weight:bold;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.vac{padding:12px;border:1px solid #ddd;border-radius:8px;margin:9px 0}.hidden{display:none}.muted{color:#586174;font-size:13px}.preview-wrap{overflow-x:auto;margin-top:12px}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}@media(max-width:650px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<header><h2>Career Vacancy Portal</h2><div>Find vacancies and apply online</div><button id="showLogin">Admin Login</button></header><main>
+<div class="card"><h2>Available Vacancies</h2><div class="grid"><div><label>Company filter</label><select id="fc"><option value="">All companies</option></select></div><div><label>Location filter</label><select id="fl"><option value="">All locations</option></select></div></div><div id="vacancies">Loading…</div></div>
+<div class="card"><h2>Candidate Application</h2><form id="apply"><label>Full Name</label><input name="full_name" required><div class="grid"><div><label>Mobile</label><input name="phone" required></div><div><label>Email</label><input name="email" type="email" required></div></div><label>Company</label><select name="company_name" id="company" required></select><label>Location</label><select name="location" id="location" required></select><label>Role</label><select name="role" id="role" required></select><label>Resume (PDF/DOC/DOCX, max 5 MB)</label><input name="resume" type="file" accept=".pdf,.doc,.docx" required><button id="submit">Submit Application</button><p id="applyMsg"></p></form></div>
+<div class="card hidden" id="login"><h3>Admin Login</h3><form id="loginForm"><label>Email</label><input name="email" type="email" required><label>Password</label><input name="password" type="password" required><button>Login</button></form><p id="loginMsg"></p></div>
+<div class="card hidden" id="admin"><button id="logout">Logout</button><h2>Admin Dashboard</h2><h3>Add vacancy</h3><form id="addVac"><div class="grid"><div><label>Company</label><input name="company_name" required></div><div><label>Location</label><input name="location" required></div><div><label>Role</label><input name="role" required></div><div><label>Vacant Count</label><input name="vacant_count" type="number" min="0" required></div></div><button>Save Vacancy</button></form><p id="adminMsg"></p>
+<h3>Bulk upload vacancies using Excel</h3>
+<div class="card" style="margin:10px 0;padding:14px">
+<p class="muted">One row per vacancy. Required columns: Company, Location, Role, Vacant Count.</p>
+<button type="button" id="downloadTemplate">Download Excel Template</button>
+<label for="bulkFile" style="display:block;margin-top:14px">Choose Excel / CSV file</label>
+<input id="bulkFile" type="file" accept=".xlsx,.xls,.csv">
+<p id="bulkMsg" class="muted">Select a file to preview it before uploading.</p>
+<div id="bulkPreview" class="preview-wrap"></div>
+<button type="button" id="uploadBulk" disabled>Upload Vacancies</button>
+</div>
+<h3>Vacancy list</h3><div id="adminVac"></div><h3>Candidate applications</h3>
+<div class="card" style="margin:10px 0;padding:14px">
+  <div class="grid">
+    <div><label>Filter by Company</label><select id="appCompany"><option value="">All companies</option></select></div>
+    <div><label>Filter by Location</label><select id="appLocation"><option value="">All locations</option></select></div>
+    <div><label>Filter by Role</label><select id="appRole"><option value="">All roles</option></select></div>
+  </div>
+  <p id="appSummary" class="muted">Loading application summary…</p>
+</div>
+<div id="apps"></div></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
+/* Replace only these two values. URL must NOT contain /rest/v1/ */
+const SUPABASE_URL="https://yypeoasxzzsnsnhjdbht.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_sSFZCDu_aHtKWXdz3456zw_dRynco62";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY), bucket="resumes";
+let rows=[];
+const $=x=>document.getElementById(x), esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function opts(el,arr,first){el.innerHTML='<option value="">'+first+'</option>';[...new Set(arr)].filter(Boolean).sort().forEach(x=>el.add(new Option(x,x)))}
+async function load(){let r=await db.from("vacancies").select("*").eq("is_active",true).order("company_name");if(r.error){$("vacancies").textContent=r.error.message;return}rows=r.data||[];opts($("fc"),rows.map(x=>x.company_name),"All companies");opts($("fl"),rows.map(x=>x.location),"All locations");opts($("company"),rows.map(x=>x.company_name),"Select company");render()}
+function render(){let list=rows.filter(x=>(!$("fc").value||x.company_name===$("fc").value)&&(!$("fl").value||x.location===$("fl").value));$("vacancies").innerHTML=list.length?list.map(x=>`<div class="vac"><b>${esc(x.company_name)} — ${esc(x.role)}</b><br>${esc(x.location)} · ${x.vacant_count} opening(s)</div>`).join(""):"No current vacancies"}
+$("fc").onchange=render;$("fl").onchange=render;
+$("company").onchange=()=>{let a=rows.filter(x=>x.company_name===$("company").value);opts($("location"),a.map(x=>x.location),"Select location");opts($("role"),a.map(x=>x.role),"Select role")};
+$("location").onchange=()=>opts($("role"),rows.filter(x=>x.company_name===$("company").value&&x.location===$("location").value).map(x=>x.role),"Select role");
+$("apply").onsubmit=async e=>{e.preventDefault();let f=new FormData(e.target),file=f.get("resume");if(file.size>5*1024*1024){$("applyMsg").textContent="Resume must be under 5 MB";return}let path=crypto.randomUUID()+"-"+file.name.replace(/[^\w.-]/g,"_");let u=await db.storage.from(bucket).upload(path,file);if(u.error){$("applyMsg").textContent=u.error.message;return}let q=await db.from("applications").insert({full_name:f.get("full_name"),phone:f.get("phone"),email:f.get("email"),company_name:f.get("company_name"),location:f.get("location"),role:f.get("role"),resume_path:path,resume_filename:file.name});if(q.error){await db.storage.from(bucket).remove([path]);$("applyMsg").textContent=q.error.message}else{e.target.reset();$("applyMsg").textContent="Application submitted successfully"}};
+$("showLogin").onclick=()=>$("login").classList.toggle("hidden");
+$("loginForm").onsubmit=async e=>{e.preventDefault();let f=new FormData(e.target),r=await db.auth.signInWithPassword({email:f.get("email"),password:f.get("password")});if(r.error){$("loginMsg").textContent=r.error.message;return}let a=await db.from("admin_users").select("user_id").eq("user_id",r.data.user.id).maybeSingle();if(!a.data){await db.auth.signOut();$("loginMsg").textContent="This account is not an admin";return}$("login").classList.add("hidden");$("admin").classList.remove("hidden");adminLoad()};
+$("logout").onclick=async()=>{await db.auth.signOut();$("admin").classList.add("hidden")};
+$("addVac").onsubmit=async e=>{e.preventDefault();let f=new FormData(e.target),r=await db.from("vacancies").insert({company_name:f.get("company_name"),location:f.get("location"),role:f.get("role"),vacant_count:Number(f.get("vacant_count")),is_active:true});$("adminMsg").textContent=r.error?.message||"Vacancy saved";if(!r.error){e.target.reset();adminLoad();load()}};
+let applicationRows=[];
+async function adminLoad(){
+  let v=await db.from("vacancies").select("*").order("created_at",{ascending:false});
+  $("adminVac").innerHTML='<table><tr><th>Company</th><th>Location</th><th>Role</th><th>Count</th><th>Action</th></tr>'+
+    (v.data||[]).map(x=>`<tr><td>${esc(x.company_name)}</td><td>${esc(x.location)}</td><td>${esc(x.role)}</td><td>${x.vacant_count}</td><td><button type="button" onclick="deleteVac('${esc(x.id)}')" style="background:#dc2626">Delete</button></td></tr>`).join("")+'</table>';
+  let a=await db.from("applications").select("*").order("created_at",{ascending:false});
+  if(a.error){$("apps").textContent="Could not load applications: "+a.error.message;return;}
+  applicationRows=a.data||[];
+  opts($("appCompany"),applicationRows.map(x=>x.company_name),"All companies");
+  opts($("appLocation"),applicationRows.map(x=>x.location),"All locations");
+  opts($("appRole"),applicationRows.map(x=>x.role),"All roles");
+  renderApplications();
+}
+function renderApplications(){
+  const c=$("appCompany").value,l=$("appLocation").value,r=$("appRole").value;
+  const filtered=applicationRows.filter(x=>(!c||x.company_name===c)&&(!l||x.location===l)&&(!r||x.role===r));
+  const companies=new Set(filtered.map(x=>x.company_name).filter(Boolean)).size;
+  const locations=new Set(filtered.map(x=>x.location).filter(Boolean)).size;
+  const roles=new Set(filtered.map(x=>x.role).filter(Boolean)).size;
+  $("appSummary").textContent=`Applications: ${filtered.length} | Companies: ${companies} | Locations: ${locations} | Roles: ${roles}`;
+  $("apps").innerHTML=filtered.length?'<div style="overflow-x:auto"><table><tr><th>Applied Date</th><th>Candidate</th><th>Mobile</th><th>Email</th><th>Company</th><th>Location</th><th>Role</th><th>Resume</th></tr>'+
+    filtered.map(x=>`<tr><td>${x.created_at?new Date(x.created_at).toLocaleDateString():"-"}</td><td>${esc(x.full_name)}</td><td>${esc(x.phone)}</td><td>${esc(x.email)}</td><td>${esc(x.company_name)}</td><td>${esc(x.location)}</td><td>${esc(x.role)}</td><td><button type="button" onclick="resume('${esc(x.resume_path)}')">View Resume</button> <button type="button" style="background:#dc2626" onclick="deleteApplication('${esc(x.id)}','${esc(x.resume_path)}')">Delete</button></td></tr>`).join("")+'</table></div>':"No applications match these filters.";
+}
+["appCompany","appLocation","appRole"].forEach(id=>$(id).onchange=renderApplications);
+window.deleteVac=async id=>{if(!id||!confirm("ಈ vacancy ಅನ್ನು delete ಮಾಡಬೇಕೇ?"))return;const r=await db.from("vacancies").delete().eq("id",id);if(r.error){alert("Delete failed: "+r.error.message);return}alert("Vacancy deleted successfully");await adminLoad();await load()};
+window.resume=async p=>{let r=await db.storage.from(bucket).createSignedUrl(p,60);if(r.error)alert(r.error.message);else window.open(r.data.signedUrl,"_blank")};
+window.deleteApplication=async(id,path)=>{
+  if(!id||!confirm("ಈ candidate application ಅನ್ನು delete ಮಾಡಬೇಕೇ?"))return;
+  const r=await db.from("applications").delete().eq("id",id);
+  if(r.error){alert("Delete failed: "+r.error.message);return;}
+  if(path){const s=await db.storage.from(bucket).remove([path]);if(s.error)alert("Application deleted, but resume file could not be deleted: "+s.error.message);}
+  alert("Application deleted successfully");
+  await adminLoad();
+};
+
+let bulkRows=[];
+const bulkHeaders=["Company","Location","Role","Vacant Count"];
+$("downloadTemplate").onclick=()=>{
+  const ws=XLSX.utils.aoa_to_sheet([bulkHeaders,["Birla Opus Paints","Shimoga","Franchise Associate",2]]);
+  ws["!cols"]=[{wch:25},{wch:20},{wch:25},{wch:16}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Vacancies");
+  XLSX.writeFile(wb,"Career_Vacancy_Template.xlsx");
+};
+const normHead=v=>String(v??"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+$("bulkFile").onchange=async e=>{
+  bulkRows=[];$("uploadBulk").disabled=true;$("bulkPreview").innerHTML="";
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(sheet,{defval:""});
+    if(!data.length)throw new Error("No data rows found");
+    const keys=Object.keys(data[0]);
+    const getKey=names=>keys.find(k=>names.includes(normHead(k)));
+    const ck=getKey(["company","companyname"]),lk=getKey(["location","city"]);
+    const rk=getKey(["role","vacantrole","jobrole"]),nk=getKey(["vacantcount","count","openings","vacancies"]);
+    if(!ck||!lk||!rk||!nk)throw new Error("Use the template headings: Company, Location, Role, Vacant Count");
+    bulkRows=data.map((r,i)=>({company_name:String(r[ck]??"").trim(),location:String(r[lk]??"").trim(),role:String(r[rk]??"").trim(),vacant_count:Number(r[nk]),rowNumber:i+2}))
+      .filter(r=>r.company_name||r.location||r.role||String(r.vacant_count)!=="NaN");
+    const invalid=bulkRows.filter(r=>!r.company_name||!r.location||!r.role||!Number.isInteger(r.vacant_count)||r.vacant_count<0);
+    $("bulkPreview").innerHTML='<table><tr><th>Company</th><th>Location</th><th>Role</th><th>Count</th><th>Status</th></tr>'+
+      bulkRows.map(r=>`<tr><td>${esc(r.company_name)}</td><td>${esc(r.location)}</td><td>${esc(r.role)}</td><td>${esc(r.vacant_count)}</td><td>${invalid.includes(r)?"Fix row "+r.rowNumber:"Ready"}</td></tr>`).join("")+'</table>';
+    $("bulkMsg").textContent=`${bulkRows.length} row(s) found. ${invalid.length?invalid.length+" invalid row(s); correct the Excel file.":"All rows are valid."}`;
+    $("uploadBulk").disabled=!bulkRows.length||invalid.length>0;
+  }catch(err){$("bulkMsg").textContent="Could not read file: "+err.message;}
+};
+$("uploadBulk").onclick=async()=>{
+  if(!bulkRows.length)return;
+  $("uploadBulk").disabled=true;$("bulkMsg").textContent="Uploading…";
+  const existing=await db.from("vacancies").select("company_name,location,role");
+  if(existing.error){$("bulkMsg").textContent=existing.error.message;$("uploadBulk").disabled=false;return;}
+  const seen=new Set((existing.data||[]).map(x=>[x.company_name,x.location,x.role].map(v=>String(v).trim().toLowerCase()).join("|")));
+  const fresh=[],dupes=[];
+  for(const r of bulkRows){
+    const key=[r.company_name,r.location,r.role].map(v=>v.trim().toLowerCase()).join("|");
+    if(seen.has(key)){dupes.push(r);continue;}
+    seen.add(key);fresh.push({company_name:r.company_name,location:r.location,role:r.role,vacant_count:r.vacant_count,is_active:true});
+  }
+  if(!fresh.length){$("bulkMsg").textContent=`No new rows uploaded. ${dupes.length} duplicate row(s) skipped.`;$("uploadBulk").disabled=false;return;}
+  const result=await db.from("vacancies").insert(fresh);
+  if(result.error){$("bulkMsg").textContent="Upload failed: "+result.error.message;$("uploadBulk").disabled=false;return;}
+  $("bulkMsg").textContent=`Uploaded ${fresh.length} row(s). ${dupes.length} duplicate row(s) skipped.`;
+  $("bulkFile").value="";$("bulkPreview").innerHTML="";bulkRows=[];await adminLoad();await load();
+};
+
+load();
+</script></body></html>
